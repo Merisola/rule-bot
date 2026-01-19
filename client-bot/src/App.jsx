@@ -1,4 +1,8 @@
 import { useState } from "react";
+import axios from "axios";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "https://rule-backend.themeronway.com";
 
 export default function App() {
   const [action, setAction] = useState("");
@@ -12,16 +16,28 @@ export default function App() {
     setResponse(null);
 
     try {
-      const res = await fetch("http://localhost:5000/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
+      const { data } = await axios.post(
+        `${API_BASE_URL}/evaluate`,
+        { action },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 15000,
+        },
+      );
 
-      const data = await res.json();
       setResponse(data);
     } catch (err) {
-      setResponse({ error: err.message });
+      console.error("API error:", err);
+
+      setResponse({
+        error:
+          err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          "Something went wrong",
+      });
     } finally {
       setLoading(false);
     }
@@ -32,7 +48,7 @@ export default function App() {
       <h1 className="text-2xl font-bold mb-4">Rules Chatbot</h1>
 
       <textarea
-        className="w-full p-2 border border-gray-300 rounded"
+        className="w-full p-2 border border-gray-300 rounded resize-none"
         rows={4}
         placeholder="Type your action here..."
         value={action}
@@ -40,7 +56,7 @@ export default function App() {
       />
 
       <button
-        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
         onClick={handleSubmit}
         disabled={loading}
       >
@@ -50,20 +66,20 @@ export default function App() {
       {response && (
         <div className="mt-6 p-4 border border-gray-200 rounded bg-gray-50">
           {response.error ? (
-            <div className="text-red-500">{response.error}</div>
+            <div className="text-red-600">{response.error}</div>
           ) : (
             <>
-              <div className="font-bold mb-2">Judgment:</div>
+              <div className="font-bold mb-1">Judgment</div>
               <div className="mb-2">{response.judgment}</div>
 
-              <div className="font-bold mb-2">Violations:</div>
+              <div className="font-bold mb-1">Violations</div>
               <div className="text-red-600 mb-2">
                 {response.violations?.length
                   ? response.violations.join(", ")
                   : "None"}
               </div>
 
-              <div className="font-bold mb-2">Explanation:</div>
+              <div className="font-bold mb-1">Explanation</div>
               <div className="mb-2">{response.explanation}</div>
 
               <div className="italic text-gray-600">
