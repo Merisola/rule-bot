@@ -1,94 +1,40 @@
-import { useState } from "react";
-import axios from "axios";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { Toaster } from "react-hot-toast"; // 1. Import the provider
+import Chat from "./components/Chat";
+import Settings from "./components/Settings";
 
 export default function App() {
-  const [action, setAction] = useState("");
-  const [response, setResponse] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!action.trim()) return;
-
-    setLoading(true);
-    setResponse(null);
-
-    try {
-      const { data } = await axios.post(
-        `${API_BASE_URL}/evaluate`,
-        { action },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 15000,
-        },
-      );
-
-      setResponse(data);
-    } catch (err) {
-      console.error("API error:", err);
-
-      setResponse({
-        error:
-          err.response?.data?.error ||
-          err.response?.data?.message ||
-          err.message ||
-          "Something went wrong",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="max-w-xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Rules Chatbot</h1>
+    <Router>
+      <div className="min-h-screen bg-gray-50">
+        {/* 2. Place it here so it's always "listening" for toast events */}
+        <Toaster position="top-center" reverseOrder={false} />
 
-      <textarea
-        className="w-full p-2 border border-gray-300 rounded resize-none"
-        rows={4}
-        placeholder="Type your action here..."
-        value={action}
-        onChange={(e) => setAction(e.target.value)}
-      />
+        <nav className="bg-white shadow-sm p-4 flex justify-between items-center max-w-4xl mx-auto mb-6 rounded-b-lg">
+          <h1 className="text-xl font-bold text-blue-600">Rule Alchemist</h1>
+          <div className="space-x-6">
+            <Link
+              to="/"
+              className="text-gray-600 hover:text-blue-500 font-medium transition"
+            >
+              Chat
+            </Link>
+            <Link
+              to="/settings"
+              className="text-gray-600 hover:text-blue-500 font-medium transition"
+            >
+              Settings
+            </Link>
+          </div>
+        </nav>
 
-      <button
-        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-        onClick={handleSubmit}
-        disabled={loading}
-      >
-        {loading ? "Evaluating..." : "Evaluate"}
-      </button>
-
-      {response && (
-        <div className="mt-6 p-4 border border-gray-200 rounded bg-gray-50">
-          {response.error ? (
-            <div className="text-red-600">{response.error}</div>
-          ) : (
-            <>
-              <div className="font-bold mb-1">Judgment</div>
-              <div className="mb-2">{response.judgment}</div>
-
-              <div className="font-bold mb-1">Violations</div>
-              <div className="text-red-600 mb-2">
-                {response.violations?.length
-                  ? response.violations.join(", ")
-                  : "None"}
-              </div>
-
-              <div className="font-bold mb-1">Explanation</div>
-              <div className="mb-2">{response.explanation}</div>
-
-              <div className="italic text-gray-600">
-                {response.reflection_prompt}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+        <main className="max-w-4xl mx-auto px-4 pb-20">
+          <Routes>
+            <Route path="/" element={<Chat />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
   );
 }
