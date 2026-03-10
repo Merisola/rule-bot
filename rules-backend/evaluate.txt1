@@ -1,0 +1,260 @@
+const express = require("express");
+const axios = require("axios");
+const db = require("./models/db"); // 
+const { getActiveRules } = require("./rulesService"); 
+const { buildPrompt } = require("./promptBuilder"); 
+
+const router = express.Router();
+
+router.post("/", async (req, res) => {
+  const { action } = req.body || {};
+
+  // --- 1. Empty input guard ---
+  if (!action || typeof action !== "string" || !action.trim()) {
+    return res.status(400).json({ error: "Missing or invalid 'action' field" });
+  }
+
+  try {
+    // --- 2. Fetch rules from DB ---
+    let rules;
+    try {
+      rules = await getActiveRules();
+      if (!rules || rules.length === 0) {
+        return res.status(400).json({ error: "No active rules found" });
+      }
+    } catch (dbErr) {
+      console.error("DB error:", dbErr);
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch rules from database." });
+    }
+
+    // --- 3. Build prompt for AI ---
+    const prompt = buildPrompt(action, rules);
+
+    // --- 4. Call Hugging Face router API with timeout ---
+    let hfResponse;
+    try {
+      hfResponse = await axios.post(
+        "https://router.huggingface.co/v1/chat/completions",
+        {
+          model: "meta-llama/Llama-3.1-8B-Instruct",
+          messages: [{ role: "user", content: prompt }],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.HF_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 15000, // 15-second timeout
+        },
+      );
+    } catch (hfErr) {
+      console.error(
+        "Hugging Face API error:",
+        hfErr.response?.data || hfErr.message,
+      );
+
+      if (hfErr.code === "ECONNABORTED") {
+        return res
+          .status(504)
+          .json({ error: "AI request timed out. Try again later." });
+      }
+
+      return res
+        .status(502)
+        .json({ error: "AI model failed to respond. Try again later." });
+    }
+
+    // --- 5. Safely extract AI content ---
+    const aiContent = hfResponse?.data?.choices?.[0]?.message?.content;
+
+    if (!aiContent) {
+      return res
+        .status(502)
+        .json({ error: "AI model returned empty or malformed response." });
+    }
+
+    // --- 6. Parse AI JSON safely ---
+    const cleaned = aiContent.replace(/```json|```/g, "").trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      parsed = {
+        judgment: "Unable to parse AI response",
+        violations: [],
+        explanation: cleaned || "AI returned unexpected output.",
+        reflection_prompt: "Reflect on the action and the rules manually.",
+      };
+    }
+
+    // --- 7. NEW FEATURE: Save to DB (Milestone 3) ---
+    // We do this BEFORE the final response to ensure we have a judgmentId
+    try {
+      // Map the AI judgment sentence to our strict ENUM
+      const rawV = String(parsed.judgment).toLowerCase();
+      const safeVerdict =
+        rawV.includes("win") || rawV.includes("good") ? "WIN" : "STOP";
+
+      const [dbResult] = await db.execute(
+        `INSERT INTO judgments 
+        (action_text, judgment_status, ai_explanation, reflection_prompt, status) 
+        VALUES (?, ?, ?, ?, 'PENDING')`,
+        [
+          action,
+          safeVerdict,
+          parsed.explanation,
+          parsed.reflection_prompt || "Think about your next move.",
+        ],
+      );
+
+      // We add the ID to the parsed object so the frontend can use it
+      parsed.judgmentId = dbResult.insertId;
+    } catch (saveErr) {
+      console.error("Database save error (Non-blocking):", saveErr);
+      // We keep going so the user still gets their AI answer even if DB fails
+      parsed.dbError = "Action not recorded in history.";
+    }
+
+    // --- 8. Add severity notes from hard rules ---
+    // (Restoring your original logic here)
+    parsed.severityNotes = rules
+      .filter((r) => r.rule_type === "hard")
+      .map((r) => r.rule_text);
+
+    // --- 9. Return structured response ---
+    res.json(parsed);
+  } catch (err) {
+    console.error("Full backend error:", err);
+    res.status(500).json({
+      error: "Failed to evaluate action",
+      details: err.message,
+    });
+  }
+});
+
+// router.patch("/resolve/:id", ... )
+router.patch("/resolve/:id", async (req, res) => {
+  const { id } = req.params;
+  const { actualOutcome, difficulty } = req.body; // actualOutcome: 'SUCCESS' or 'FAILURE'
+
+  try {
+    // 1. Fetch the judgment and the associated rules
+    const [judgments] = await db.execute(`SELECT * FROM judgments WHERE id = ?`, [id]);
+    if (judgments.length === 0) return res.status(404).json({ error: "Judgment not found" });
+
+    const judgment = judgments[0];
+    
+    // 2. Logic: Calculate points
+    // We'll expand this later to map severity, but for now: Base +/- 100
+    let points = judgment.judgment_status === 'WIN' ? 100 : -100;
+
+    // If you failed a 'STOP' verdict, or succeeded a 'WIN' verdict
+    // We adjust based on 'actualOutcome'
+    if (actualOutcome === 'FAILURE') points = -Math.abs(points);
+    if (actualOutcome === 'SUCCESS') points = Math.abs(points);
+
+    // 3. Apply Difficulty 10 Multiplier
+    if (parseInt(difficulty) === 10) {
+      points *= 2;
+    }
+
+    // 4. Update Database
+    await db.execute(
+      `UPDATE judgments SET status = 'RESOLVED', resolved_at = NOW() WHERE id = ?`,
+      [id]
+    );
+
+    await db.execute(
+      `INSERT INTO point_ledger (judgment_id, points_change, difficulty_level, reason) 
+       VALUES (?, ?, ?, ?)`,
+      [id, points, difficulty, `Resolved: ${actualOutcome}`]
+    );
+
+    res.json({ success: true, pointsAwarded: points });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to resolve action" });
+  }
+});
+
+router.patch("/resolve/:id", async (req, res) => {
+  const { id } = req.params;
+  const { actualOutcome, difficulty } = req.body;
+
+  try {
+    // 1. Get the judgment AND the violations the AI found
+    const [judgments] = await db.execute(
+      `SELECT judgment_status, ai_explanation FROM judgments WHERE id = ?`,
+      [id],
+    );
+
+    if (judgments.length === 0)
+      return res.status(404).json({ error: "Judgment not found" });
+    const judgment = judgments[0];
+
+    // 2. Fetch all rules to match them against the AI's explanation/violations
+    // Note: In a later milestone, we can make the AI return IDs specifically.
+    // For now, we fetch active rules to calculate weight.
+    const [rules] = await db.execute(
+      `SELECT rule_text, severity FROM rules WHERE active = 1`,
+    );
+
+    // 3. Calculate Weight based on Severity
+    const severityMap = { ABSOLUTE: 100, HIGH: 50, MEDIUM: 25, LOW: 10 };
+    let basePoints = 0;
+
+    // Check which rules are mentioned in the AI's explanation or violations
+    rules.forEach((rule) => {
+      if (judgment.ai_explanation.includes(rule.rule_text)) {
+        basePoints += severityMap[rule.severity] || 10;
+      }
+    });
+
+    // Fallback if no specific rule text matched
+    if (basePoints === 0) basePoints = 25;
+
+    // 4. Final Math: Outcome + Difficulty Multiplier
+    let finalPoints = actualOutcome === "SUCCESS" ? basePoints : -basePoints;
+
+    const diffLevel = parseInt(difficulty) || 1;
+    if (diffLevel === 10) {
+      finalPoints *= 2; // The "Neural Rewire" bonus
+    }
+
+    // 5. Update DB
+    await db.execute(
+      `UPDATE judgments SET status = 'RESOLVED', resolved_at = NOW() WHERE id = ?`,
+      [id],
+    );
+
+    await db.execute(
+      `INSERT INTO point_ledger (judgment_id, points_change, difficulty_level, reason) 
+       VALUES (?, ?, ?, ?)`,
+      [id, finalPoints, diffLevel, `Outcome: ${actualOutcome}`],
+    );
+
+    res.json({
+      success: true,
+      pointsAwarded: finalPoints,
+      newTotal: true, // Trigger a refresh on the frontend
+    });
+  } catch (err) {
+    console.error("Severity Service Error:", err);
+    res.status(500).json({ error: "Failed to process severity points" });
+  }
+});
+
+router.get("/points/total", async (req, res) => {
+  try {
+    const [rows] = await db.execute(
+      `SELECT COALESCE(SUM(points_change), 0) as total FROM point_ledger`,
+    );
+    res.json({ total: rows[0].total });
+  } catch (err) {
+    res.status(500).json({ error: "Could not fetch score" });
+  }
+});
+
+module.exports = router;
