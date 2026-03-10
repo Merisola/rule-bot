@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { toast } from "react-hot-toast"; // Milestone 7 Integration
+import { toast } from "react-hot-toast"; 
 import {
   Trash2,
   Plus,
@@ -30,7 +30,7 @@ export default function Settings() {
       const { data } = await axios.get(`${API_BASE_URL}/rules`);
       setRules(data);
     } catch (err) {
-      toast.error("Failed to sync principles.");
+      toast.error("Failed to sync principles."), err;
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ export default function Settings() {
                 setRules(rules.filter((r) => r.id !== id));
                 toast.success("Rule moved to archives.");
               } catch (err) {
-                toast.error("Archiving failed.");
+                toast.error("Archiving failed."), err;
               }
             }}
           >

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { toast } from "react-hot-toast"; 
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -17,8 +18,24 @@ export default function Trash() {
   };
 
   useEffect(() => {
-    fetchTrash();
-  }, []);
+    // Define a self-contained async controller
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        await fetchTrash();
+      } catch (err) {
+        if (isMounted) toast.error("Failed to load archives."), err;
+      }
+    };
+
+    loadData();
+
+    // Cleanup function to prevent state updates on unmounted components
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Empty dependency array is fine here
 
   const handleRestore = async (id) => {
     try {

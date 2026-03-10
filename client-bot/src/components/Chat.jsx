@@ -41,7 +41,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-2 px-4 font-sans text-slate-900">
+    <div className="min-h-screen bg-slate-50 py-1 px-4 font-sans text-slate-900">
       <div className="max-w-2xl mx-auto">
         <header className="text-center mb-10">
           <div className="inline-block p-3 bg-blue-600 rounded-2xl mb-4 shadow-xl shadow-blue-200">

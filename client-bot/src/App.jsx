@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import { Toaster } from "react-hot-toast"; // 1. Import the provider
 import Chat from "./components/Chat";
 import Settings from "./components/Settings";
+import NotFound from "./components/NotFound";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Chat />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
       </div>
