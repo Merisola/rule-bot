@@ -41,3 +41,34 @@ exports.restoreFromTrash = async (ruleId) => {
   );
   return result.affectedRows > 0;
 };
+
+// Inside models/ruleModel.js
+
+exports.deletePermanently = async (id) => {
+  try {
+    // This is where the actual SQL execution happens
+    const [result] = await db.query("DELETE FROM rules WHERE id = ?", [id]);
+    return result.affectedRows > 0;
+  } catch (err) {
+    console.error("Database Error during hard delete:", err);
+    throw err;
+  }
+};
+
+exports.addRule = async (ruleData) => {
+  const { rule_text, type, priority } = ruleData;
+  try {
+    // Correct mapping for your specific SQL schema
+    const ruleType = type.toUpperCase();
+    const severity = ruleType === "HARD" ? "ABSOLUTE" : "MEDIUM";
+
+    const [result] = await db.query(
+      "INSERT INTO rules (rule_text, rule_type, severity, priority, active, is_deleted) VALUES (?, ?, ?, ?, TRUE, FALSE)",
+      [rule_text, ruleType, severity, priority],
+    );
+    return result.insertId;
+  } catch (err) {
+    console.error("Database Error in addRule:", err);
+    throw err;
+  }
+};

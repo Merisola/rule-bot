@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const ruleRoutes = require("./routes/ruleRoutes");
+const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.static("public"));
 // --- 2. Routes ---
 // This mounts all rule-related paths (evaluate, trash, settings) under /api
 app.use("/api", ruleRoutes);
+app.use(errorHandler);
 
 // Health check
 app.get("/", (req, res) => {
