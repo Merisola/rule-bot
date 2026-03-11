@@ -4,7 +4,7 @@ import { Sparkles, ShieldAlert, CheckCircle, Info, Send } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "https://rule-backend.themeronway.com";
 
 export default function App() {
   const [action, setAction] = useState("");

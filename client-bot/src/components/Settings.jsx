@@ -12,7 +12,7 @@ import {
 import TrashView from "./TrashView";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "https://rule-backend.themeronway.com";
 
 export default function Settings() {
   const [rules, setRules] = useState([]);
