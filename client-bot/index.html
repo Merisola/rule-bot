@@ -4,10 +4,53 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/src/assets/logo.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>client-bot</title>
+    <title>Alchemist Oracle</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <style>
+        .boot-wrapper {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          background-color: #f8fafc;
+          font-family: sans-serif;
+        }
+        .orb {
+          width: 60px;
+          height: 60px;
+          background: #2563eb;
+          border-radius: 24px;
+          box-shadow: 0 20px 40px rgba(37, 99, 235, 0.2);
+          animation: pulse-orb 1.5s infinite ease-in-out;
+        }
+        @keyframes pulse-orb {
+          0%,
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.1);
+            opacity: 0.7;
+          }
+        }
+        .boot-text {
+          margin-top: 24px;
+          font-weight: 900;
+          letter-spacing: -0.025em;
+          color: #1e293b;
+          text-transform: uppercase;
+          font-size: 0.75rem;
+        }
+      </style>
+      <div class="boot-wrapper">
+        <div class="orb"></div>
+        <div class="boot-text">Initializing Oracle...</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
